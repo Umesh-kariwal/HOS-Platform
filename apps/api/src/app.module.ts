@@ -7,6 +7,7 @@ import { BookingsModule } from './bookings/bookings.module';
 import { NightAuditModule } from './night-audit/night-audit.module';
 import { GuestsModule } from './guests/guests.module';
 import { PropertiesModule } from './properties/properties.module';
+import { InventoryModule } from './inventory/inventory.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { PropertiesModule } from './properties/properties.module';
     NightAuditModule,
     GuestsModule,
     PropertiesModule,
+    InventoryModule,
   ],
   controllers: [],
   providers: [],
