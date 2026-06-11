@@ -1,0 +1,36 @@
+datasource db {
+  provider = "postgresql"
+  url      = "postgresql://hos_app_user:SecurePassword123@127.0.0.1:5432/hos_catalog?schema=catalog"
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./test-client-pg"
+}
+
+model Tenant {
+  id     String @id @db.Uuid
+  name   String
+  status String @default("active")
+
+  @@map("tenants")
+}
+
+model Employee {
+  id       String  @id @db.Uuid
+  tenantId String  @map("tenant_id") @db.Uuid
+  email    String  @unique
+  isActive Boolean @default(true) @map("is_active")
+
+  @@map("employees")
+}
+
+model RolePermission {
+  id       String @id @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  roleId   String @map("role_id") @db.Uuid
+  resource String
+  action   String
+
+  @@map("role_permissions")
+}

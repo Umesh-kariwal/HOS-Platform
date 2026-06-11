@@ -1,0 +1,475 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==========================================
+// 1. GLOBAL CATALOG REGISTRY
+// ==========================================
+
+model Tenant {
+  id        String        @id @default(uuid()) @db.Uuid
+  name      String
+  status    String        @default("active")
+  createdAt DateTime      @default(now()) @map("created_at")
+  routes    BranchRoute[]
+
+  @@map("tenants")
+}
+
+model BranchRoute {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  branchId  String   @map("branch_id") @db.Uuid
+  domain    String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("branch_routes")
+}
+
+// ==========================================
+// 2. TENANT ACCOMMODATIONS & TRANSACTION DATA (Shared-Table)
+// ==========================================
+
+model Branch {
+  id                   String                 @id @default(uuid()) @db.Uuid
+  tenantId             String                 @map("tenant_id") @db.Uuid
+  name                 String
+  timezone             String                 @default("UTC")
+  currency             String                 @default("USD")
+  createdAt            DateTime               @default(now()) @map("created_at")
+  employees            Employee[]
+  floors               Floor[]
+  roomTypes            RoomType[]
+  rooms                Room[]
+  bookings             Booking[]
+  inventoryLocations   InventoryLocation[]
+  parkingSlots         ParkingSlot[]
+  lostAndFoundItems    LostAndFoundItem[]
+  incidentLogs         IncidentLog[]
+  offlineSyncRecords   OfflineSyncRecord[]
+  propertyDates        PropertyDate?
+  nightAuditCheckpoints NightAuditCheckpoint[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@map("branches")
+}
+
+model Role {
+  id          String           @id @default(uuid()) @db.Uuid
+  tenantId    String           @map("tenant_id") @db.Uuid
+  name        String
+  description String?
+  permissions RolePermission[]
+  employees   Employee[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, name], name: "uq_tenant_role")
+  @@index([tenantId])
+  @@map("roles")
+}
+
+model RolePermission {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  roleId   String @map("role_id") @db.Uuid
+  resource String
+  action   String
+  role     Role   @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, roleId, resource, action], name: "uq_role_permission")
+  @@index([tenantId])
+  @@map("role_permissions")
+}
+
+model Employee {
+  id                String             @id @default(uuid()) @db.Uuid
+  tenantId          String             @map("tenant_id") @db.Uuid
+  branchId          String             @map("branch_id") @db.Uuid
+  roleId            String             @map("role_id") @db.Uuid
+  firstName         String             @map("first_name")
+  lastName          String             @map("last_name")
+  email             String             @unique
+  passwordHash      String             @map("password_hash")
+  isActive          Boolean            @default(true) @map("is_active")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  branch            Branch             @relation(fields: [tenantId, branchId], references: [tenantId, id])
+  role              Role               @relation(fields: [tenantId, roleId], references: [tenantId, id])
+  lostAndFoundItems LostAndFoundItem[]
+  incidentLogs      IncidentLog[]
+  auditLogs         AuditLog[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@map("employees")
+}
+
+model Floor {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  branchId    String   @map("branch_id") @db.Uuid
+  name        String
+  floorNumber Int      @map("floor_number")
+  branch      Branch   @relation(fields: [tenantId, branchId], references: [tenantId, id], onDelete: Cascade)
+  rooms       Room[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, branchId, floorNumber], name: "uq_branch_floor")
+  @@index([tenantId])
+  @@map("floors")
+}
+
+model RoomType {
+  id                      String              @id @default(uuid()) @db.Uuid
+  tenantId                String              @map("tenant_id") @db.Uuid
+  branchId                String              @map("branch_id") @db.Uuid
+  code                    String
+  name                    String
+  rackRate                Decimal             @map("rack_rate") @db.Decimal(12, 2)
+  maxOccupancy            Int                 @default(2) @map("max_occupancy")
+  cleaningDurationMinutes Int                 @default(30) @map("cleaning_duration_minutes")
+  branch                  Branch              @relation(fields: [tenantId, branchId], references: [tenantId, id])
+  rooms                   Room[]
+  inventorySnapshots      InventorySnapshot[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@map("room_types")
+}
+
+model Room {
+  id                String             @id @default(uuid()) @db.Uuid
+  tenantId          String             @map("tenant_id") @db.Uuid
+  branchId          String             @map("branch_id") @db.Uuid
+  floorId           String             @map("floor_id") @db.Uuid
+  roomTypeId        String             @map("room_type_id") @db.Uuid
+  roomNumber        String             @map("room_number")
+  physicalStatus    String             @default("clean") @map("physical_status")
+  occupancyStatus   String             @default("vacant") @map("occupancy_status")
+  branch            Branch             @relation(fields: [tenantId, branchId], references: [tenantId, id])
+  floor             Floor              @relation(fields: [tenantId, floorId], references: [tenantId, id])
+  roomType          RoomType           @relation(fields: [tenantId, roomTypeId], references: [tenantId, id])
+  bookings          Booking[]
+  lostAndFoundItems LostAndFoundItem[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, branchId, roomNumber], name: "uq_branch_room")
+  @@index([tenantId])
+  @@index([tenantId, roomTypeId])
+  @@index([tenantId, physicalStatus, occupancyStatus])
+  @@map("rooms")
+}
+
+model InventorySnapshot {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  roomTypeId   String   @map("room_type_id") @db.Uuid
+  snapshotDate DateTime @map("snapshot_date") @db.Date
+  totalPhysical Int     @map("total_physical")
+  soldQty      Int      @default(0) @map("sold_qty")
+  availableQty Int      @map("available_qty")
+  roomType     RoomType @relation(fields: [tenantId, roomTypeId], references: [tenantId, id])
+
+  @@unique([tenantId, roomTypeId, snapshotDate], name: "uq_room_type_date")
+  @@index([tenantId])
+  @@index([tenantId, snapshotDate])
+  @@map("inventory_snapshots")
+}
+
+model Guest {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  firstName       String    @map("first_name")
+  lastName        String    @map("last_name")
+  email           String
+  phone           String?
+  profileMetadata Json?     @map("profile_metadata")
+  bookings        Booking[]
+  folios          Folio[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@map("guests")
+}
+
+model Booking {
+  id                 String              @id @default(uuid()) @db.Uuid
+  tenantId           String              @map("tenant_id") @db.Uuid
+  branchId           String              @map("branch_id") @db.Uuid
+  guestId            String              @map("guest_id") @db.Uuid
+  roomId             String?             @map("room_id") @db.Uuid
+  checkInDate        DateTime            @map("check_in_date") @db.Date
+  checkOutDate       DateTime            @map("check_out_date") @db.Date
+  status             String              @default("reserved")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  branch             Branch              @relation(fields: [tenantId, branchId], references: [tenantId, id])
+  guest              Guest               @relation(fields: [tenantId, guestId], references: [tenantId, id])
+  room               Room?               @relation(fields: [tenantId, roomId], references: [tenantId, id])
+  folios             Folio[]
+  billingRoutingRules BillingRoutingRule[]
+  visitorRecords     VisitorRecord[]
+  valetTickets       ValetTicket[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, branchId, checkInDate, status], name: "idx_bookings_lookup")
+  @@index([tenantId, checkInDate])
+  @@index([tenantId, status])
+  @@map("bookings")
+}
+
+model Folio {
+  id                  String               @id @default(uuid()) @db.Uuid
+  tenantId            String               @map("tenant_id") @db.Uuid
+  bookingId           String               @map("booking_id") @db.Uuid
+  parentFolioId       String?              @map("parent_folio_id") @db.Uuid
+  payerType           String               @default("guest") @map("payer_type")
+  payerGuestId        String?              @map("payer_guest_id") @db.Uuid
+  status              String               @default("open")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  booking             Booking              @relation(fields: [tenantId, bookingId], references: [tenantId, id])
+  parentFolio         Folio?               @relation("FolioHierarchy", fields: [tenantId, parentFolioId], references: [tenantId, id])
+  childFolios         Folio[]              @relation("FolioHierarchy")
+  payerGuest          Guest?               @relation(fields: [tenantId, payerGuestId], references: [tenantId, id])
+  ledgerEntries       LedgerEntry[]        @relation("FolioLedger")
+  routedLedgerEntries LedgerEntry[]        @relation("SourceFolioLedger")
+  billingRoutingRules BillingRoutingRule[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@map("folios")
+}
+
+model BillingRoutingRule {
+  id             String  @id @default(uuid()) @db.Uuid
+  tenantId       String  @map("tenant_id") @db.Uuid
+  bookingId      String  @map("booking_id") @db.Uuid
+  chargeCategory String  @map("charge_category")
+  splitType      String  @map("split_type")
+  value          Decimal @db.Decimal(12, 2)
+  targetFolioId  String  @map("target_folio_id") @db.Uuid
+  booking        Booking @relation(fields: [tenantId, bookingId], references: [tenantId, id], onDelete: Cascade)
+  targetFolio    Folio   @relation(fields: [tenantId, targetFolioId], references: [tenantId, id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("billing_routing_rules")
+}
+
+model LedgerEntry {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  folioId         String   @map("folio_id") @db.Uuid
+  sourceFolioId   String?  @map("source_folio_id") @db.Uuid
+  type            String
+  amount          Decimal  @db.Decimal(12, 2)
+  description     String
+  idempotencyKey  String   @unique @map("idempotency_key")
+  createdAt       DateTime @default(now()) @map("created_at")
+  folio           Folio    @relation("FolioLedger", fields: [tenantId, folioId], references: [tenantId, id], onDelete: Cascade)
+  sourceFolio     Folio?   @relation("SourceFolioLedger", fields: [tenantId, sourceFolioId], references: [tenantId, id])
+
+  @@index([tenantId, folioId, createdAt], name: "idx_ledger_entries_lookup")
+  @@index([tenantId, createdAt])
+  @@map("ledger_entries")
+}
+
+model PropertyDate {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  branchId     String   @map("branch_id") @db.Uuid
+  businessDate DateTime @map("business_date") @db.Date
+  status       String   @default("open")
+  branch       Branch   @relation(fields: [tenantId, branchId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, branchId])
+  @@index([tenantId])
+  @@map("property_dates")
+}
+
+model NightAuditCheckpoint {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  branchId       String   @map("branch_id") @db.Uuid
+  checkpointName String   @map("checkpoint_name")
+  completedAt    DateTime @default(now()) @map("completed_at")
+  branch         Branch   @relation(fields: [tenantId, branchId], references: [tenantId, id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("night_audit_checkpoints")
+}
+
+model InventoryLocation {
+  id          String       @id @default(uuid()) @db.Uuid
+  tenantId    String       @map("tenant_id") @db.Uuid
+  branchId    String       @map("branch_id") @db.Uuid
+  name        String
+  isActive    Boolean      @default(true) @map("is_active")
+  branch      Branch       @relation(fields: [tenantId, branchId], references: [tenantId, id])
+  stockLevels StockLevel[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@map("inventory_locations")
+}
+
+model Item {
+  id                    String       @id @default(uuid()) @db.Uuid
+  tenantId              String       @map("tenant_id") @db.Uuid
+  sku                   String       @unique
+  name                  String
+  category              String
+  safetyStockThreshold  Int          @default(10) @map("safety_stock_threshold")
+  stockLevels           StockLevel[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@map("items")
+}
+
+model StockLevel {
+  id                  String            @id @default(uuid()) @db.Uuid
+  tenantId            String            @map("tenant_id") @db.Uuid
+  inventoryLocationId String            @map("inventory_location_id") @db.Uuid
+  itemId              String            @map("item_id") @db.Uuid
+  quantity            Int               @default(0)
+  updatedAt           DateTime          @default(now()) @map("updated_at")
+  inventoryLocation   InventoryLocation @relation(fields: [tenantId, inventoryLocationId], references: [tenantId, id])
+  item                Item              @relation(fields: [tenantId, itemId], references: [tenantId, id])
+
+  @@unique([tenantId, inventoryLocationId, itemId], name: "uq_location_item")
+  @@index([tenantId])
+  @@map("stock_levels")
+}
+
+model ParkingSlot {
+  id             String        @id @default(uuid()) @db.Uuid
+  tenantId       String        @map("tenant_id") @db.Uuid
+  branchId       String        @map("branch_id") @db.Uuid
+  slotIdentifier String        @map("slot_identifier")
+  status         String        @default("vacant")
+  branch         Branch        @relation(fields: [tenantId, branchId], references: [tenantId, id])
+  valetTickets   ValetTicket[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@map("parking_slots")
+}
+
+model ValetTicket {
+  id             String       @id @default(uuid()) @db.Uuid
+  tenantId       String       @map("tenant_id") @db.Uuid
+  bookingId      String       @map("booking_id") @db.Uuid
+  vehicleLicense String       @map("vehicle_license")
+  keyTag         String       @map("key_tag")
+  parkingSlotId  String?      @map("parking_slot_id") @db.Uuid
+  status         String       @default("parked")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  booking        Booking      @relation(fields: [tenantId, bookingId], references: [tenantId, id])
+  parkingSlot    ParkingSlot? @relation(fields: [tenantId, parkingSlotId], references: [tenantId, id])
+
+  @@index([tenantId])
+  @@map("valet_tickets")
+}
+
+model VisitorRecord {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  bookingId    String    @map("booking_id") @db.Uuid
+  firstName    String    @map("first_name")
+  lastName     String    @map("last_name")
+  idHash       String    @map("id_hash")
+  checkInTime  DateTime  @default(now()) @map("check_in_time")
+  checkOutTime DateTime? @map("check_out_time")
+  booking      Booking   @relation(fields: [tenantId, bookingId], references: [tenantId, id])
+
+  @@index([tenantId])
+  @@map("visitor_records")
+}
+
+model LostAndFoundItem {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  branchId         String    @map("branch_id") @db.Uuid
+  roomId           String?   @map("room_id") @db.Uuid
+  description      String
+  storageBin       String    @map("storage_bin")
+  status           String    @default("reported")
+  finderEmployeeId String    @map("finder_employee_id") @db.Uuid
+  claimantName     String?   @map("claimant_name")
+  claimedAt        DateTime? @map("claimed_at")
+  branch           Branch    @relation(fields: [tenantId, branchId], references: [tenantId, id])
+  room             Room?     @relation(fields: [tenantId, roomId], references: [tenantId, id])
+  finder           Employee  @relation(fields: [tenantId, finderEmployeeId], references: [tenantId, id])
+
+  @@index([tenantId])
+  @@map("lost_and_found_items")
+}
+
+model IncidentLog {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  branchId        String   @map("branch_id") @db.Uuid
+  type            String
+  status          String   @default("active")
+  escalationLevel Int      @default(1) @map("escalation_level")
+  details         String
+  loggedById      String   @map("logged_by_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  branch          Branch   @relation(fields: [tenantId, branchId], references: [tenantId, id])
+  loggedBy        Employee @relation(fields: [tenantId, loggedById], references: [tenantId, id])
+
+  @@index([tenantId])
+  @@map("incident_logs")
+}
+
+model OfflineSyncRecord {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  branchId  String   @map("branch_id") @db.Uuid
+  deviceId  String   @map("device_id")
+  action    String
+  payload   Json
+  status    String   @default("pending")
+  errorLog  String?  @map("error_log")
+  createdAt DateTime @default(now()) @map("created_at")
+  branch    Branch   @relation(fields: [tenantId, branchId], references: [tenantId, id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("offline_sync_records")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String
+  entityName String   @map("entity_name")
+  entityId   String   @map("entity_id")
+  oldValues  Json?    @map("old_values")
+  newValues  Json?    @map("new_values")
+  ipAddress  String   @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+  actor      Employee? @relation(fields: [tenantId, actorId], references: [tenantId, id])
+
+  @@index([tenantId, entityName, entityId], name: "idx_audit_logs_lookup")
+  @@map("audit_logs")
+}
+
+model Outbox {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  aggregateType String   @map("aggregate_type")
+  aggregateId   String   @map("aggregate_id")
+  eventType     String   @map("event_type")
+  payload       Json
+  processed     Boolean  @default(false)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId])
+  @@map("outbox")
+}

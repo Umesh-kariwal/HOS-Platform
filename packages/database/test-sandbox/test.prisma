@@ -1,0 +1,30 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./test.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./test-client"
+}
+
+model Tenant {
+  id     String @id
+  name   String
+  status String @default("active")
+}
+
+model Employee {
+  id       String  @id
+  tenantId String
+  email    String
+  isActive Boolean @default(true)
+}
+
+model RolePermission {
+  id       String @id
+  tenantId String
+  roleId   String
+  resource String
+  action   String
+}

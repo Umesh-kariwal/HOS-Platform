@@ -1,0 +1,14 @@
+node_modules
+.turbo
+dist
+.next
+out
+*.log
+.env
+.env.local
+.env.production
+.env.development
+*.db
+*.db-journal
+db.sqlite
+build
