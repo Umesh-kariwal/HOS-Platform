@@ -5,6 +5,8 @@ import { TenantContextMiddleware } from './tenant/tenant-context.middleware';
 import { RoomsModule } from './rooms/rooms.module';
 import { BookingsModule } from './bookings/bookings.module';
 import { NightAuditModule } from './night-audit/night-audit.module';
+import { GuestsModule } from './guests/guests.module';
+import { PropertiesModule } from './properties/properties.module';
 
 @Module({
   imports: [
@@ -12,7 +14,9 @@ import { NightAuditModule } from './night-audit/night-audit.module';
     AuthModule,
     RoomsModule,
     BookingsModule,
-    NightAuditModule
+    NightAuditModule,
+    GuestsModule,
+    PropertiesModule,
   ],
   controllers: [],
   providers: [],

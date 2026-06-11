@@ -12,3 +12,5 @@ out
 *.db-journal
 db.sqlite
 build
+pgdata
+
