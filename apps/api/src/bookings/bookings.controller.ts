@@ -23,6 +23,53 @@ export class BookingsController {
   }
 
   @UseGuards(AuthGuard('jwt'))
+  @Get(':id/folios')
+  async getFolios(@Param('id') bookingId: string, @Request() req: any) {
+    const tenantId = req.user.tenantId;
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
+
+    if (!booking) {
+      throw new BadRequestException('Booking not found');
+    }
+
+    let folios = await this.prisma.folio.findMany({
+      where: { bookingId },
+      include: {
+        ledgerEntries: true,
+        billingRoutingRules: true,
+        payerGuest: true,
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+
+    // Self-healing fallback: Create default folio if none exist
+    if (folios.length === 0) {
+      const defaultFolio = await this.prisma.folio.create({
+        data: {
+          tenantId,
+          bookingId,
+          payerType: 'guest',
+          payerGuestId: booking.guestId,
+          status: 'open',
+        },
+        include: {
+          ledgerEntries: true,
+          billingRoutingRules: true,
+          payerGuest: true,
+        },
+      });
+      folios = [defaultFolio];
+    }
+
+    return folios;
+  }
+
+  @UseGuards(AuthGuard('jwt'))
   @Post()
   async createBooking(
     @Request() req: any,
@@ -112,7 +159,18 @@ export class BookingsController {
         },
       });
 
-      // 4. Update Inventory Snapshots if room type is resolved
+      // 4. Create default Folio for the booking
+      await tx.folio.create({
+        data: {
+          tenantId,
+          bookingId: booking.id,
+          payerType: 'guest',
+          payerGuestId: guest.id,
+          status: 'open',
+        },
+      });
+
+      // 5. Update Inventory Snapshots if room type is resolved
       if (roomTypeId) {
         await this.updateInventorySnapshots(
           tx,

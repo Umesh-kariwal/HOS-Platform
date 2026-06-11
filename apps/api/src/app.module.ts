@@ -8,6 +8,7 @@ import { NightAuditModule } from './night-audit/night-audit.module';
 import { GuestsModule } from './guests/guests.module';
 import { PropertiesModule } from './properties/properties.module';
 import { InventoryModule } from './inventory/inventory.module';
+import { FoliosModule } from './folios/folios.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { InventoryModule } from './inventory/inventory.module';
     GuestsModule,
     PropertiesModule,
     InventoryModule,
+    FoliosModule,
   ],
   controllers: [],
   providers: [],
