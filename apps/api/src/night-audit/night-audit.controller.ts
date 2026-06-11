@@ -117,8 +117,74 @@ export class NightAuditController {
     const nextBusDate = new Date(currentBusDate);
     nextBusDate.setDate(nextBusDate.getDate() + 1);
 
-    return this.prisma.runInTenantContext(tenantId, async (tx) => {
-      // 1. Advance the date
+    const dateStr = currentBusDate.toISOString().split('T')[0];
+
+    return this.prisma.runInTenantContext(tenantId, async (tx: any) => {
+      // 1. ROOM CHARGE AUTOPOSTER: Post daily room charges to all active folios
+      // Find all bookings currently in-house (checked_in) for the current business date night
+      const activeBookings = await tx.booking.findMany({
+        where: {
+          branchId,
+          status: 'checked_in',
+          checkInDate: { lte: currentBusDate },
+          checkOutDate: { gt: currentBusDate },
+        },
+        include: {
+          room: {
+            include: { roomType: true },
+          },
+        },
+      });
+
+      console.log(`[Night Audit] Found ${activeBookings.length} in-house bookings to autopost room charges.`);
+
+      for (const booking of activeBookings) {
+        if (booking.room && booking.room.roomType) {
+          const roomRate = Number(booking.room.roomType.rackRate);
+          const idempotencyKey = `room_charge_${booking.id}_${dateStr}`;
+
+          // Find or create primary guest folio for this booking
+          let folio = await tx.folio.findFirst({
+            where: {
+              bookingId: booking.id,
+              payerType: 'guest',
+            },
+          });
+
+          if (!folio) {
+            folio = await tx.folio.create({
+              data: {
+                tenantId,
+                bookingId: booking.id,
+                payerType: 'guest',
+                payerGuestId: booking.guestId,
+                status: 'open',
+              },
+            });
+          }
+
+          // Check if room charge was already posted to prevent double charging
+          const existingCharge = await tx.ledgerEntry.findFirst({
+            where: { idempotencyKey },
+          });
+
+          if (!existingCharge) {
+            await tx.ledgerEntry.create({
+              data: {
+                tenantId,
+                folioId: folio.id,
+                type: 'room_charge',
+                amount: roomRate,
+                description: `Room Charge - Night of ${dateStr} (Room ${booking.room.roomNumber})`,
+                idempotencyKey,
+              },
+            });
+            console.log(`[Night Audit] Auto-posted room charge of $${roomRate} to Folio ${folio.id} for Booking ${booking.id}`);
+          }
+        }
+      }
+
+      // 2. Advance the business date
       await tx.propertyDate.update({
         where: {
           tenantId_branchId: {
@@ -132,21 +198,37 @@ export class NightAuditController {
         },
       });
 
-      // 2. Create audit checkpoint
+      // 3. Create audit checkpoint
       const checkpoint = await tx.nightAuditCheckpoint.create({
         data: {
           tenantId,
           branchId,
-          checkpointName: `Day Rollover: ${currentBusDate.toISOString().split('T')[0]} -> ${nextBusDate.toISOString().split('T')[0]}`,
+          checkpointName: `Day Rollover: ${dateStr} -> ${nextBusDate.toISOString().split('T')[0]}`,
           completedAt: new Date(),
+        },
+      });
+
+      // 4. Publish transactional outbox event
+      await tx.outbox.create({
+        data: {
+          tenantId,
+          aggregateType: 'PropertyDate',
+          aggregateId: propDate.id,
+          eventType: 'BusinessDateRolled',
+          payload: {
+            previousDate: dateStr,
+            newDate: nextBusDate.toISOString().split('T')[0],
+            autopostedCount: activeBookings.length,
+          },
         },
       });
 
       return {
         success: true,
-        previousDate: currentBusDate.toISOString().split('T')[0],
+        previousDate: dateStr,
         newDate: nextBusDate.toISOString().split('T')[0],
         checkpoint,
+        autopostedChargesCount: activeBookings.length,
       };
     });
   }
