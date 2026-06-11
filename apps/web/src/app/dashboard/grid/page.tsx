@@ -493,7 +493,46 @@ export default function RoomGridPage() {
             </div>
 
             {/* Actions Panel */}
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
+              <a 
+                href={`/dashboard/guests/${selectedBooking.guest.id}`}
+                style={{
+                  backgroundColor: '#f3f4f6',
+                  color: '#374151',
+                  border: '1px solid #d1d5db',
+                  padding: '10px 16px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  textDecoration: 'none',
+                  fontSize: '13px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                👤 Profile
+              </a>
+              <a 
+                href={`/dashboard/folios/${selectedBooking.id}`}
+                style={{
+                  backgroundColor: '#f3f4f6',
+                  color: '#374151',
+                  border: '1px solid #d1d5db',
+                  padding: '10px 16px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  textDecoration: 'none',
+                  fontSize: '13px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                💳 Billing
+              </a>
+              <div style={{ flexGrow: 1 }} />
               <button 
                 onClick={() => setSelectedBooking(null)}
                 style={{ backgroundColor: '#ffffff', border: '1px solid #d1d5db', color: '#374151', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}

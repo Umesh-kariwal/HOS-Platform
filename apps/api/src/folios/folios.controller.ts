@@ -8,6 +8,32 @@ import { v4 as uuidv4 } from 'uuid';
 export class FoliosController {
   constructor(private readonly prisma: PrismaService) {}
 
+  @Post()
+  async createFolio(
+    @Request() req: any,
+    @Body() body: {
+      bookingId: string;
+      payerType?: string;
+      payerGuestId?: string;
+    },
+  ) {
+    const tenantId = req.user.tenantId;
+
+    if (!body.bookingId) {
+      throw new BadRequestException('bookingId is required');
+    }
+
+    return this.prisma.folio.create({
+      data: {
+        tenantId,
+        bookingId: body.bookingId,
+        payerType: body.payerType || 'guest',
+        payerGuestId: body.payerGuestId || null,
+        status: 'open',
+      },
+    });
+  }
+
   @Get(':id')
   async getFolioById(@Param('id') id: string) {
     const folio = await this.prisma.folio.findUnique({
