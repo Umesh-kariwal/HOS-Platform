@@ -25,13 +25,24 @@ const PASSWORD_HASH = '$2b$10$VnkBXXLuLFouJ3yXFfjn2O.bziy.vd5SNO5Wp33aV3rpmb4iqg
 async function main() {
   console.log('--- SEEDING PILOT PROPERTY DATA ---');
 
-  // Delete existing records to ensure clean idempotent run
+    // Delete existing records to ensure clean idempotent run
   // Delete order matches child-parent relationships
   console.log('Cleaning up existing records...');
-  await prisma.booking.deleteMany();
+  await prisma.valetTicket.deleteMany();
+  await prisma.parkingSlot.deleteMany();
+  await prisma.visitorRecord.deleteMany();
+  await prisma.lostAndFoundItem.deleteMany();
+  await prisma.incidentLog.deleteMany();
+  await prisma.ledgerEntry.deleteMany();
+  await prisma.billingRoutingRule.deleteMany();
+  await prisma.folio.deleteMany();
+    await prisma.booking.deleteMany();
   await prisma.guest.deleteMany();
   await prisma.nightAuditCheckpoint.deleteMany();
   await prisma.propertyDate.deleteMany();
+  await prisma.inventorySnapshot.deleteMany();
+  await prisma.offlineSyncRecord.deleteMany();
+  await prisma.outbox.deleteMany();
   await prisma.room.deleteMany();
   await prisma.roomType.deleteMany();
   await prisma.floor.deleteMany();

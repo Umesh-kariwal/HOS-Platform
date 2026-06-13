@@ -159,6 +159,7 @@ model Room {
   lostAndFoundItems LostAndFoundItem[]
 
   @@unique([tenantId, id])
+  @@unique([tenantId, branchId, id], name: "uq_tenant_branch_room")
   @@unique([tenantId, branchId, roomNumber], name: "uq_branch_room")
   @@index([tenantId])
   @@index([tenantId, roomTypeId])
@@ -356,6 +357,8 @@ model ParkingSlot {
   valetTickets   ValetTicket[]
 
   @@unique([tenantId, id])
+  @@unique([tenantId, branchId, id], name: "uq_tenant_branch_parking_slot")
+  @@unique([tenantId, branchId, slotIdentifier], name: "uq_branch_slot")
   @@index([tenantId])
   @@map("parking_slots")
 }
@@ -363,6 +366,7 @@ model ParkingSlot {
 model ValetTicket {
   id             String       @id @default(uuid()) @db.Uuid
   tenantId       String       @map("tenant_id") @db.Uuid
+  branchId       String       @map("branch_id") @db.Uuid
   bookingId      String       @map("booking_id") @db.Uuid
   vehicleLicense String       @map("vehicle_license")
   keyTag         String       @map("key_tag")
@@ -370,7 +374,7 @@ model ValetTicket {
   status         String       @default("parked")
   createdAt      DateTime     @default(now()) @map("created_at")
   booking        Booking      @relation(fields: [tenantId, bookingId], references: [tenantId, id])
-  parkingSlot    ParkingSlot? @relation(fields: [tenantId, parkingSlotId], references: [tenantId, id])
+  parkingSlot    ParkingSlot? @relation(fields: [tenantId, branchId, parkingSlotId], references: [tenantId, branchId, id])
 
   @@index([tenantId])
   @@map("valet_tickets")
@@ -403,7 +407,7 @@ model LostAndFoundItem {
   claimantName     String?   @map("claimant_name")
   claimedAt        DateTime? @map("claimed_at")
   branch           Branch    @relation(fields: [tenantId, branchId], references: [tenantId, id])
-  room             Room?     @relation(fields: [tenantId, roomId], references: [tenantId, id])
+  room             Room?     @relation(fields: [tenantId, branchId, roomId], references: [tenantId, branchId, id])
   finder           Employee  @relation(fields: [tenantId, finderEmployeeId], references: [tenantId, id])
 
   @@index([tenantId])

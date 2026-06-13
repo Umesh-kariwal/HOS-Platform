@@ -329,6 +329,187 @@ async function verifyAll() {
     process.exit(1);
   }
 
+  // ----------------------------------------------------------------
+  // WORKFLOW 7: OPERATIONAL PERIPHERALS (OOP) INTEGRATION
+  // ----------------------------------------------------------------
+  // ----------------------------------------------------------------
+  // WORKFLOW 7: OPERATIONAL PERIPHERALS (OOP) INTEGRATION
+  // ----------------------------------------------------------------
+  console.log('\n--- WORKFLOW 7: Operational Peripherals (OOP) Integration ---');
+  try {
+    // 0. Setup a fresh checked-in booking for peripherals testing
+    console.log('POST /bookings request (fresh booking for peripherals)');
+    const oopBookingRes = await request(`${API_BASE}/bookings`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: {
+        guestFirstName: 'Bob',
+        guestLastName: 'Visitor',
+        guestEmail: 'bob.visitor@gmail.com',
+        checkInDate: '2026-06-11',
+        checkOutDate: '2026-06-13',
+        roomId: '55555555-5555-5555-5555-555555555552' // Room 102 to avoid conflict on Room 101
+      }
+    });
+    if (oopBookingRes.status !== 201) {
+      throw new Error(`OOP booking creation failed: ${oopBookingRes.status}`);
+    }
+    const oopBookingId = oopBookingRes.data.id;
+    console.log(`-> Fresh Booking Created: ${oopBookingId}`);
+
+    console.log('POST /bookings/:id/check-in request');
+    const oopCheckinRes = await request(`${API_BASE}/bookings/${oopBookingId}/check-in`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: { roomId: '55555555-5555-5555-5555-555555555552' }
+    });
+    if (oopCheckinRes.status !== 201) {
+      throw new Error(`OOP check-in failed: ${oopCheckinRes.status}`);
+    }
+    console.log('-> Fresh Booking checked in.');
+
+    // A. Create Parking Slot
+    console.log('POST /peripherals/parking request');
+    const slotRes = await request(`${API_BASE}/peripherals/parking`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: { slotIdentifier: 'E2E Slot 1' }
+    });
+    console.log('POST /peripherals/parking response status:', slotRes.status);
+    if (slotRes.status !== 201) {
+      throw new Error(`Failed to create slot: ${slotRes.status}`);
+    }
+    const slotId = slotRes.data.id;
+
+    // B. Issue Valet Ticket
+    console.log('POST /peripherals/valet request');
+    const valetRes = await request(`${API_BASE}/peripherals/valet`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: {
+        bookingId: oopBookingId,
+        vehicleLicense: 'E2E-LICENSE',
+        keyTag: 'K-E2E',
+        parkingSlotId: slotId
+      }
+    });
+    console.log('POST /peripherals/valet response status:', valetRes.status);
+    if (valetRes.status !== 201) {
+      throw new Error(`Failed to create valet ticket: ${valetRes.status}`);
+    }
+    const valetTicketId = valetRes.data.id;
+
+    // Verify slot is occupied in DB
+    const slotDb = await prisma.parkingSlot.findUnique({ where: { id: slotId } });
+    console.log('Database Query Result: Slot Status:', slotDb.status);
+    if (slotDb.status !== 'occupied') {
+      throw new Error('Expected slot status to be occupied.');
+    }
+
+    // Retrieve vehicle
+    console.log('PATCH /peripherals/valet/:id/retrieve request');
+    const retrieveRes = await request(`${API_BASE}/peripherals/valet/${valetTicketId}/retrieve`, {
+      method: 'PATCH',
+      headers: authHeaders
+    });
+    console.log('PATCH /peripherals/valet/:id/retrieve response status:', retrieveRes.status);
+    if (retrieveRes.status !== 200) {
+      throw new Error(`Failed to retrieve vehicle: ${retrieveRes.status}`);
+    }
+
+    // Verify slot is vacant in DB
+    const slotDbAfter = await prisma.parkingSlot.findUnique({ where: { id: slotId } });
+    console.log('Database Query Result: Slot Status after retrieval:', slotDbAfter.status);
+    if (slotDbAfter.status !== 'vacant') {
+      throw new Error('Expected slot status to return to vacant.');
+    }
+
+    // C. Visitor Check-in (with Server-side Hashing)
+    console.log('POST /peripherals/visitors request');
+    const visitorRes = await request(`${API_BASE}/peripherals/visitors`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: {
+        bookingId: oopBookingId,
+        firstName: 'John',
+        lastName: 'Visitor',
+        idNumber: 'PASSPORT-998877'
+      }
+    });
+    console.log('POST /peripherals/visitors response status:', visitorRes.status);
+    if (visitorRes.status !== 201) {
+      throw new Error(`Failed to register visitor: ${visitorRes.status}`);
+    }
+    const visitorRecordId = visitorRes.data.id;
+
+    // Verify DB hashing
+    const visitorDb = await prisma.visitorRecord.findUnique({ where: { id: visitorRecordId } });
+    console.log(`Database Query Result: Visitor record ID Hash: ${visitorDb.idHash}`);
+    if (!visitorDb.idHash || visitorDb.idHash.length !== 64 || JSON.stringify(visitorDb).includes('PASSPORT-998877')) {
+      throw new Error('PII Leak or hashing failure: Plain text ID document is stored!');
+    }
+
+    // Checkout visitor
+    console.log('PATCH /peripherals/visitors/:id/checkout request');
+    const checkoutRes = await request(`${API_BASE}/peripherals/visitors/${visitorRecordId}/checkout`, {
+      method: 'PATCH',
+      headers: authHeaders
+    });
+    console.log('PATCH /peripherals/visitors/:id/checkout response status:', checkoutRes.status);
+    if (checkoutRes.status !== 200) {
+      throw new Error(`Failed to checkout visitor: ${checkoutRes.status}`);
+    }
+
+    // D. Lost & Found
+    console.log('POST /peripherals/lost-found request');
+    const lostRes = await request(`${API_BASE}/peripherals/lost-found`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: {
+        roomId: '55555555-5555-5555-5555-555555555551',
+        description: 'iPhone 15 Pro',
+        storageBin: 'Bin L-9'
+      }
+    });
+    console.log('POST /peripherals/lost-found response status:', lostRes.status);
+    if (lostRes.status !== 201) {
+      throw new Error(`Failed to log lost item: ${lostRes.status}`);
+    }
+    const lostItemId = lostRes.data.id;
+
+    // Claim item
+    console.log('PATCH /peripherals/lost-found/:id/claim request');
+    const claimRes = await request(`${API_BASE}/peripherals/lost-found/${lostItemId}/claim`, {
+      method: 'PATCH',
+      headers: authHeaders,
+      body: { claimantName: 'John Visitor' }
+    });
+    console.log('PATCH /peripherals/lost-found/:id/claim response status:', claimRes.status);
+    if (claimRes.status !== 200) {
+      throw new Error(`Failed to claim lost item: ${claimRes.status}`);
+    }
+
+    // E. Incident Log
+    console.log('POST /peripherals/incidents request');
+    const incidentRes = await request(`${API_BASE}/peripherals/incidents`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: {
+        type: 'general',
+        details: 'Reception desk keyboard spill'
+      }
+    });
+    console.log('POST /peripherals/incidents response status:', incidentRes.status);
+    if (incidentRes.status !== 201) {
+      throw new Error(`Failed to log incident: ${incidentRes.status}`);
+    }
+
+    console.log('✅ WORKFLOW 7 PASS');
+  } catch (err) {
+    console.error('❌ WORKFLOW 7 FAIL:', err.message);
+    process.exit(1);
+  }
+
   console.log('\n================================================================');
   console.log('   🎉 ALL WORKFLOWS PASSED VERIFICATION END-TO-END! 🎉');
   console.log('================================================================');

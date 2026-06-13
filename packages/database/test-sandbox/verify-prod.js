@@ -31,6 +31,20 @@ async function resetDB() {
   await adminPrisma.$executeRawUnsafe(`ALTER TABLE catalog.employees DISABLE ROW LEVEL SECURITY;`);
   await adminPrisma.$executeRawUnsafe(`ALTER TABLE catalog.role_permissions DISABLE ROW LEVEL SECURITY;`);
   
+  // Clean up in correct dependency order
+  await adminPrisma.valetTicket.deleteMany();
+  await adminPrisma.parkingSlot.deleteMany();
+  await adminPrisma.visitorRecord.deleteMany();
+  await adminPrisma.lostAndFoundItem.deleteMany();
+  await adminPrisma.incidentLog.deleteMany();
+  await adminPrisma.ledgerEntry.deleteMany();
+  await adminPrisma.billingRoutingRule.deleteMany();
+  await adminPrisma.folio.deleteMany();
+  await adminPrisma.booking.deleteMany();
+  await adminPrisma.inventorySnapshot.deleteMany();
+  await adminPrisma.room.deleteMany();
+  await adminPrisma.roomType.deleteMany();
+  await adminPrisma.floor.deleteMany();
   await adminPrisma.employee.deleteMany();
   await adminPrisma.rolePermission.deleteMany();
   await adminPrisma.role.deleteMany();

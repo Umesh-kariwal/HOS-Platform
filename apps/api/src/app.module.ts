@@ -10,6 +10,7 @@ import { PropertiesModule } from './properties/properties.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { FoliosModule } from './folios/folios.module';
 import { SyncModule } from './sync/sync.module';
+import { PeripheralsModule } from './peripherals/peripherals.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { SyncModule } from './sync/sync.module';
     InventoryModule,
     FoliosModule,
     SyncModule,
+    PeripheralsModule,
   ],
   controllers: [],
   providers: [],
