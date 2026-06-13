@@ -33,6 +33,7 @@ async function main() {
   await prisma.visitorRecord.deleteMany();
   await prisma.lostAndFoundItem.deleteMany();
   await prisma.incidentLog.deleteMany();
+  await prisma.maintenanceTicket.deleteMany();
   await prisma.ledgerEntry.deleteMany();
   await prisma.billingRoutingRule.deleteMany();
   await prisma.folio.deleteMany();

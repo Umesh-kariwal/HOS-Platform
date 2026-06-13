@@ -152,6 +152,7 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   get visitorRecord() { return this.client.visitorRecord; }
   get lostAndFoundItem() { return this.client.lostAndFoundItem; }
   get incidentLog() { return this.client.incidentLog; }
+  get maintenanceTicket() { return this.client.maintenanceTicket; }
   get offlineSyncRecord() { return this.client.offlineSyncRecord; }
   get auditLog() { return this.client.auditLog; }
   get outbox() { return this.client.outbox; }

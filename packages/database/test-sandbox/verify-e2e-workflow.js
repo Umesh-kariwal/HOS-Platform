@@ -505,6 +505,61 @@ async function verifyAll() {
     }
 
     console.log('✅ WORKFLOW 7 PASS');
+
+    // --- WORKFLOW 8: Maintenance & Preventive Care (Ticketing) ---
+    console.log('\n--- WORKFLOW 8: Maintenance & Preventive Care ---');
+    try {
+      // Clean up previous maintenance tickets
+      await prisma.maintenanceTicket.deleteMany();
+
+      console.log('POST /maintenance request (Create ticket for Room 102)');
+      const maintRes = await request(`${API_BASE}/maintenance`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: {
+          roomId: '55555555-5555-5555-5555-555555555552', // Room 102
+          description: 'AC compressor overheating',
+          priority: 'critical',
+          category: 'hvac'
+        }
+      });
+      console.log('POST /maintenance response status:', maintRes.status);
+      if (maintRes.status !== 201) {
+        throw new Error(`Failed to create maintenance ticket: ${maintRes.status}`);
+      }
+      const ticketId = maintRes.data.id;
+
+      // Verify Room is set to maintenance physicalStatus in DB
+      const maintRoom = await prisma.room.findUnique({ where: { id: '55555555-5555-5555-5555-555555555552' } });
+      console.log('Database Query Result: Room 102 status:', maintRoom.physicalStatus);
+      if (maintRoom.physicalStatus !== 'maintenance') {
+        throw new Error('Expected Room 102 to be in maintenance status.');
+      }
+
+      // Complete ticket
+      console.log('PATCH /maintenance/:id/complete request');
+      const completeMaintRes = await request(`${API_BASE}/maintenance/${ticketId}/complete`, {
+        method: 'PATCH',
+        headers: authHeaders,
+        body: { completionNotes: 'Cleaned compressor coils and fan blades.' }
+      });
+      console.log('PATCH /maintenance/:id/complete response status:', completeMaintRes.status);
+      if (completeMaintRes.status !== 200) {
+        throw new Error(`Failed to complete ticket: ${completeMaintRes.status}`);
+      }
+
+      // Verify Room is restored to clean physicalStatus in DB
+      const restoredRoom = await prisma.room.findUnique({ where: { id: '55555555-5555-5555-5555-555555555552' } });
+      console.log('Database Query Result: Room 102 status after completion:', restoredRoom.physicalStatus);
+      if (restoredRoom.physicalStatus !== 'clean') {
+        throw new Error('Expected Room 102 to return to clean status.');
+      }
+
+      console.log('✅ WORKFLOW 8 PASS');
+    } catch (err) {
+      console.error('❌ WORKFLOW 8 FAIL:', err.message);
+      process.exit(1);
+    }
   } catch (err) {
     console.error('❌ WORKFLOW 7 FAIL:', err.message);
     process.exit(1);

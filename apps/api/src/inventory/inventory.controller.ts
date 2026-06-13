@@ -64,7 +64,7 @@ export class InventoryController {
     // 4. Generate daily snapshots for each date in [start, end)
     const resultRoomTypes = [];
     for (const rt of roomTypes) {
-      const rtRooms = rooms.filter((r: any) => r.roomTypeId === rt.id);
+      const rtRooms = rooms.filter((r: any) => r.roomTypeId === rt.id && r.physicalStatus !== 'maintenance');
       const totalPhysical = rtRooms.length;
 
       const days = [];
@@ -112,7 +112,7 @@ export class InventoryController {
           b.checkOutDate > start
         );
       });
-      return !hasBooking;
+      return !hasBooking && r.physicalStatus !== 'maintenance';
     });
 
     return {

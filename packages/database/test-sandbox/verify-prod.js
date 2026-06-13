@@ -37,6 +37,7 @@ async function resetDB() {
   await adminPrisma.visitorRecord.deleteMany();
   await adminPrisma.lostAndFoundItem.deleteMany();
   await adminPrisma.incidentLog.deleteMany();
+  await adminPrisma.maintenanceTicket.deleteMany();
   await adminPrisma.ledgerEntry.deleteMany();
   await adminPrisma.billingRoutingRule.deleteMany();
   await adminPrisma.folio.deleteMany();

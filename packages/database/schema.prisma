@@ -55,6 +55,7 @@ model Branch {
   offlineSyncRecords   OfflineSyncRecord[]
   propertyDates        PropertyDate?
   nightAuditCheckpoints NightAuditCheckpoint[]
+  maintenanceTickets   MaintenanceTicket[]
 
   @@unique([tenantId, id])
   @@index([tenantId])
@@ -104,6 +105,8 @@ model Employee {
   lostAndFoundItems LostAndFoundItem[]
   incidentLogs      IncidentLog[]
   auditLogs         AuditLog[]
+  assignedTickets   MaintenanceTicket[] @relation("AssignedMaintenance")
+  loggedTickets     MaintenanceTicket[] @relation("LoggedMaintenance")
 
   @@unique([tenantId, id])
   @@index([tenantId])
@@ -157,6 +160,7 @@ model Room {
   roomType          RoomType           @relation(fields: [tenantId, roomTypeId], references: [tenantId, id])
   bookings          Booking[]
   lostAndFoundItems LostAndFoundItem[]
+  maintenanceTickets MaintenanceTicket[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, branchId, id], name: "uq_tenant_branch_room")
@@ -477,3 +481,29 @@ model Outbox {
   @@index([tenantId])
   @@map("outbox")
 }
+
+model MaintenanceTicket {
+  id                 String    @id @default(uuid()) @db.Uuid
+  tenantId           String    @map("tenant_id") @db.Uuid
+  branchId           String    @map("branch_id") @db.Uuid
+  roomId             String?   @map("room_id") @db.Uuid
+  description        String
+  priority           String    @default("medium") // low, medium, high, critical
+  status             String    @default("open") // open, in_progress, completed, cancelled
+  category           String    @default("general") // plumbing, electrical, hvac, furniture, general
+  assignedEmployeeId String?   @map("assigned_employee_id") @db.Uuid
+  loggedById         String    @map("logged_by_id") @db.Uuid
+  completionNotes    String?   @map("completion_notes")
+  completedAt        DateTime? @map("completed_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  branch             Branch    @relation(fields: [tenantId, branchId], references: [tenantId, id])
+  room               Room?     @relation(fields: [tenantId, branchId, roomId], references: [tenantId, branchId, id])
+  assignedEmployee   Employee? @relation("AssignedMaintenance", fields: [tenantId, assignedEmployeeId], references: [tenantId, id])
+  loggedBy           Employee  @relation("LoggedMaintenance", fields: [tenantId, loggedById], references: [tenantId, id])
+
+  @@index([tenantId, branchId])
+  @@map("maintenance_tickets")
+}
+
