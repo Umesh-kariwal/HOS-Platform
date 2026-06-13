@@ -13,4 +13,7 @@ out
 db.sqlite
 build
 pgdata
+packages/database/test-sandbox/pgsql/
+packages/database/test-sandbox/pgsql.zip
+
 
