@@ -14,6 +14,7 @@ import { PeripheralsModule } from './peripherals/peripherals.module';
 import { MaintenanceModule } from './maintenance/maintenance.module';
 import { DispatchModule } from './dispatch/dispatch.module';
 import { RevenueModule } from './revenue/revenue.module';
+import { MessageModule } from './message/message.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { RevenueModule } from './revenue/revenue.module';
     MaintenanceModule,
     DispatchModule,
     RevenueModule,
+    MessageModule,
   ],
   controllers: [],
   providers: [],

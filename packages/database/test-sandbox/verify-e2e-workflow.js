@@ -81,6 +81,25 @@ async function verifyAll() {
   console.log('         HOS END-TO-END VERIFICATION & READINESS GATE');
   console.log('================================================================');
 
+  console.log('Performing database transaction cleanup for clean E2E run...');
+  await prisma.valetTicket.deleteMany();
+  await prisma.parkingSlot.deleteMany();
+  await prisma.visitorRecord.deleteMany();
+  await prisma.lostAndFoundItem.deleteMany();
+  await prisma.incidentLog.deleteMany();
+  await prisma.maintenanceTicket.deleteMany();
+  await prisma.serviceRequest.deleteMany();
+  await prisma.ledgerEntry.deleteMany();
+  await prisma.billingRoutingRule.deleteMany();
+  await prisma.folio.deleteMany();
+  await prisma.booking.deleteMany();
+  await prisma.guest.deleteMany();
+  await prisma.message.deleteMany();
+  await prisma.stockLevel.deleteMany();
+  await prisma.inventoryLocation.deleteMany();
+  await prisma.item.deleteMany();
+  await prisma.nightAuditCheckpoint.deleteMany();
+
   let token = '';
   let authHeaders = {};
   let bookingId = '';
@@ -663,6 +682,176 @@ async function verifyAll() {
         console.log('✅ WORKFLOW 10 PASS');
       } catch (err) {
         console.error('❌ WORKFLOW 10 FAIL:', err.message);
+        process.exit(1);
+      }
+
+      // --- WORKFLOW 11: E2E STAFF MESSAGING DELIVERY ---
+      console.log('\n--- WORKFLOW 11: E2E Staff Messaging ---');
+      try {
+        const EMP_MGR_ID = '11111111-1111-1111-1111-111111111111';
+        console.log('POST /messaging request (Send message to Manager)');
+        const msgRes = await request(`${API_BASE}/messaging`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: {
+            recipientId: EMP_MGR_ID,
+            content: 'E2E Staff messaging validation test.'
+          }
+        });
+        console.log('POST /messaging response status:', msgRes.status);
+        if (msgRes.status !== 201) {
+          throw new Error(`Failed to send message: ${msgRes.status}`);
+        }
+        const msgId = msgRes.data.id;
+
+        console.log('GET /messaging/conversation/:otherEmployeeId request');
+        const convRes = await request(`${API_BASE}/messaging/conversation/${EMP_MGR_ID}`, {
+          headers: authHeaders
+        });
+        console.log('GET /messaging/conversation/:otherEmployeeId count:', convRes.data.length);
+        if (convRes.status !== 200 || convRes.data.length === 0) {
+          throw new Error('No messages found in conversation history');
+        }
+
+        console.log('Logging in as Manager to mark message as read...');
+        const mgrLoginRes = await request(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          body: {
+            email: 'manager@pilot.com',
+            password: 'SecurePassword123'
+          }
+        });
+        const mgrHeaders = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${mgrLoginRes.data.token}`
+        };
+
+        console.log('PATCH /messaging/:id/read request (as Manager)');
+        const readRes = await request(`${API_BASE}/messaging/${msgId}/read`, {
+          method: 'PATCH',
+          headers: mgrHeaders
+        });
+        console.log('PATCH /messaging/:id/read status:', readRes.status);
+        if (readRes.status !== 200) {
+          throw new Error(`Failed to mark message read: ${readRes.status}`);
+        }
+
+        console.log('✅ WORKFLOW 11 PASS');
+      } catch (err) {
+        console.error('❌ WORKFLOW 11 FAIL:', err.message);
+        process.exit(1);
+      }
+
+      // --- WORKFLOW 12: MINIBAR CONSUMPTION & AUTO-BILLING ---
+      console.log('\n--- WORKFLOW 12: Minibar Consumption & Auto-Billing ---');
+      try {
+        const TENANT_ID = '00000000-0000-0000-0000-000000000001';
+        // A. Create Catalog Item
+        console.log('POST /inventory/items request');
+        const itemRes = await request(`${API_BASE}/inventory/items`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: {
+            sku: 'E2E-MINI-01',
+            name: 'Premium Cashews',
+            category: 'snack',
+            safetyStockThreshold: 2
+          }
+        });
+        console.log('POST /inventory/items response status:', itemRes.status);
+        if (itemRes.status !== 201) {
+          throw new Error(`Failed to create item: ${itemRes.status}`);
+        }
+        const itemId = itemRes.data.id;
+
+        // B. Create Location for Room 102 Minibar
+        console.log('POST /inventory/locations request');
+        const locRes = await request(`${API_BASE}/inventory/locations`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: { name: 'Room 102 Minibar' }
+        });
+        console.log('POST /inventory/locations response status:', locRes.status);
+        if (locRes.status !== 201) {
+          throw new Error(`Failed to create location: ${locRes.status}`);
+        }
+        const locId = locRes.data.id;
+
+        // C. Adjust Stock (Pre-stock minibar with 5 units)
+        console.log('POST /inventory/stock request');
+        const stockRes = await request(`${API_BASE}/inventory/stock`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: {
+            inventoryLocationId: locId,
+            itemId: itemId,
+            quantity: 5
+          }
+        });
+        console.log('POST /inventory/stock response status:', stockRes.status);
+        if (stockRes.status !== 201) {
+          throw new Error(`Failed to pre-stock minibar: ${stockRes.status}`);
+        }
+
+        // D. Consume 3 units
+        console.log('POST /inventory/minibar/consume request (Room 102)');
+        const consumeRes = await request(`${API_BASE}/inventory/minibar/consume`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: {
+            roomNumber: '102',
+            sku: 'E2E-MINI-01',
+            quantity: 3,
+            unitPrice: 6.50
+          }
+        });
+        console.log('POST /inventory/minibar/consume response status:', consumeRes.status);
+        if (consumeRes.status !== 201) {
+          throw new Error(`Failed to consume minibar: ${consumeRes.status}`);
+        }
+
+        // E. Verify Stock decremented to 2
+        console.log('Verifying stock level in database...');
+        const dbStock = await prisma.stockLevel.findUnique({
+          where: {
+            uq_location_item: {
+              tenantId: TENANT_ID,
+              inventoryLocationId: locId,
+              itemId: itemId
+            }
+          }
+        });
+        console.log(`   Remaining Stock Level: ${dbStock.quantity} (Expected: 2)`);
+        if (dbStock.quantity !== 2) {
+          throw new Error(`Expected remaining stock to be 2, got ${dbStock.quantity}`);
+        }
+
+        // F. Verify charge is posted to Folio
+        console.log('Verifying Folio ledger entry for booking...');
+        const dbFolio = await prisma.folio.findFirst({
+          where: { bookingId: oopBookingId }
+        });
+        if (!dbFolio) {
+          throw new Error('No folio found for active booking');
+        }
+
+        const folioRes = await request(`${API_BASE}/folios/${dbFolio.id}`, {
+          headers: authHeaders
+        });
+        console.log('GET /folios/:id status:', folioRes.status);
+        const entries = folioRes.data.ledgerEntries || [];
+        const minibarEntry = entries.find(e => e.type === 'minibar');
+        if (!minibarEntry) {
+          throw new Error('No "minibar" ledger entry found on folio');
+        }
+        console.log(`   Charge posted: "${minibarEntry.description}" | Amount: $${minibarEntry.amount}`);
+        if (Number(minibarEntry.amount) !== 19.50) {
+          throw new Error(`Expected charge of 19.50, got ${minibarEntry.amount}`);
+        }
+
+        console.log('✅ WORKFLOW 12 PASS');
+      } catch (err) {
+        console.error('❌ WORKFLOW 12 FAIL:', err.message);
         process.exit(1);
       }
 

@@ -1,7 +1,8 @@
-import { Controller, Get, Query, UseGuards, Request, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards, Request, BadRequestException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { PrismaService } from '../prisma/prisma.service';
 import { RevenueService } from '../revenue/revenue.service';
+import { InventoryService } from './inventory.service';
 
 @Controller('inventory')
 @UseGuards(AuthGuard('jwt'))
@@ -9,6 +10,7 @@ export class InventoryController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly revenueService: RevenueService,
+    private readonly inventoryService: InventoryService,
   ) {}
 
   @Get('availability')
@@ -142,5 +144,83 @@ export class InventoryController {
       roomTypes: resultRoomTypes,
       availableRooms,
     };
+  }
+
+  @Get('locations')
+  async listLocations(@Request() req: any) {
+    const tenantId = req.user.tenantId;
+    const branchId = req.user.branchId;
+    return this.inventoryService.listLocations(tenantId, branchId);
+  }
+
+  @Post('locations')
+  async createLocation(@Request() req: any, @Body() body: { name: string }) {
+    const tenantId = req.user.tenantId;
+    const branchId = req.user.branchId;
+    if (!body.name || body.name.trim().length === 0) {
+      throw new BadRequestException('Location name is required');
+    }
+    return this.inventoryService.createLocation(tenantId, branchId, body.name);
+  }
+
+  @Get('items')
+  async listItems(@Request() req: any) {
+    const tenantId = req.user.tenantId;
+    return this.inventoryService.listItems(tenantId);
+  }
+
+  @Post('items')
+  async createItem(
+    @Request() req: any,
+    @Body()
+    body: {
+      sku: string;
+      name: string;
+      category: string;
+      safetyStockThreshold?: number;
+    },
+  ) {
+    const tenantId = req.user.tenantId;
+    if (!body.sku || !body.name || !body.category) {
+      throw new BadRequestException('sku, name, and category are required');
+    }
+    return this.inventoryService.createItem(tenantId, body);
+  }
+
+  @Post('stock')
+  async adjustStock(
+    @Request() req: any,
+    @Body()
+    body: {
+      inventoryLocationId: string;
+      itemId: string;
+      quantity: number;
+    },
+  ) {
+    const tenantId = req.user.tenantId;
+    const branchId = req.user.branchId;
+    if (!body.inventoryLocationId || !body.itemId || body.quantity === undefined) {
+      throw new BadRequestException('inventoryLocationId, itemId, and quantity are required');
+    }
+    return this.inventoryService.adjustStock(tenantId, branchId, body);
+  }
+
+  @Post('minibar/consume')
+  async consumeMinibar(
+    @Request() req: any,
+    @Body()
+    body: {
+      roomNumber: string;
+      sku: string;
+      quantity: number;
+      unitPrice: number;
+    },
+  ) {
+    const tenantId = req.user.tenantId;
+    const branchId = req.user.branchId;
+    if (!body.roomNumber || !body.sku || !body.quantity || body.unitPrice === undefined) {
+      throw new BadRequestException('roomNumber, sku, quantity, and unitPrice are required');
+    }
+    return this.inventoryService.consumeMinibar(tenantId, branchId, body);
   }
 }

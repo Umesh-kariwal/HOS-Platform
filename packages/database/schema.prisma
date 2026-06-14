@@ -58,6 +58,7 @@ model Branch {
   maintenanceTickets   MaintenanceTicket[]
   serviceRequests      ServiceRequest[]
   revenuePricingRules  RevenuePricingRule[]
+  messages             Message[]
 
   @@unique([tenantId, id])
   @@index([tenantId])
@@ -110,6 +111,8 @@ model Employee {
   assignedTickets   MaintenanceTicket[] @relation("AssignedMaintenance")
   loggedTickets     MaintenanceTicket[] @relation("LoggedMaintenance")
   serviceRequests   ServiceRequest[]
+  sentMessages      Message[]          @relation("SentMessages")
+  receivedMessages  Message[]          @relation("ReceivedMessages")
 
   @@unique([tenantId, id])
   @@index([tenantId])
@@ -551,3 +554,22 @@ model RevenuePricingRule {
   @@map("revenue_pricing_rules")
 }
 
+model Message {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  branchId      String    @map("branch_id") @db.Uuid
+  senderId      String    @map("sender_id") @db.Uuid
+  recipientId   String?   @map("recipient_id") @db.Uuid
+  recipientRole String?   @map("recipient_role")
+  content       String
+  isRead        Boolean   @default(false) @map("is_read")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  branch        Branch    @relation(fields: [tenantId, branchId], references: [tenantId, id])
+  sender        Employee  @relation("SentMessages", fields: [tenantId, senderId], references: [tenantId, id])
+  recipient     Employee? @relation("ReceivedMessages", fields: [tenantId, recipientId], references: [tenantId, id])
+
+  @@index([tenantId, branchId])
+  @@map("messages")
+}

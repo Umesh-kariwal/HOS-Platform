@@ -51,6 +51,16 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
             if (tenantId && !globalModels.includes(model)) {
               const anyArgs = args as any;
 
+              if (operation === 'upsert') {
+                if (anyArgs.create) {
+                  anyArgs.create.tenantId = tenantId;
+                }
+                if (anyArgs.update) {
+                  anyArgs.update.tenantId = tenantId;
+                }
+                return query(args);
+              }
+
               // 1. Map findUnique and findUniqueOrThrow to findFirst/findFirstOrThrow
               // to bypass Prisma strict unique field argument validation.
               if (operation === 'findUnique' || operation === 'findUniqueOrThrow') {
@@ -155,6 +165,7 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   get maintenanceTicket() { return this.client.maintenanceTicket; }
   get serviceRequest() { return this.client.serviceRequest; }
   get revenuePricingRule() { return this.client.revenuePricingRule; }
+  get message() { return this.client.message; }
   get offlineSyncRecord() { return this.client.offlineSyncRecord; }
   get auditLog() { return this.client.auditLog; }
   get outbox() { return this.client.outbox; }
