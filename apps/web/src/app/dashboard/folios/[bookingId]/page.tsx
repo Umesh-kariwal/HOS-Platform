@@ -24,6 +24,7 @@ interface Folio {
     lastName: string;
     email: string;
   };
+  billingRoutingRules?: any[];
 }
 
 export default function FolioViewerPage() {
@@ -240,6 +241,25 @@ export default function FolioViewerPage() {
       setError(err.message);
     } finally {
       setCreatingRule(false);
+    }
+  };
+
+  const handleDeleteRule = async (ruleId: string) => {
+    if (!confirm('Are you sure you want to delete this routing rule?')) return;
+    try {
+      const res = await fetch(`${apiBaseUrl}/folios/rules/${ruleId}`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || 'Failed to delete routing rule.');
+      }
+
+      await fetchFolios(false);
+    } catch (err: any) {
+      setError(err.message);
     }
   };
 
@@ -507,51 +527,89 @@ export default function FolioViewerPage() {
               </div>
 
               {/* Billing Routing Rules Card (Only displays if multiple folios exist) */}
-              {folios.length >= 2 && activeFolioIdx === 0 && (
-                <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', padding: '24px', border: '1px solid #e5e7eb' }}>
-                  <h4 style={{ margin: '0 0 16px 0', fontSize: '15px', fontWeight: 800, color: '#111827' }}>Configure Billing Routing</h4>
-                  
-                  <form onSubmit={handleCreateRoutingRule} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#4b5563', marginBottom: '4px' }}>Route Category</label>
-                      <select
-                        value={routeCat}
-                        onChange={(e) => setRouteCat(e.target.value)}
-                        style={{ width: '100%', padding: '8px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '6px', backgroundColor: '#ffffff' }}
-                      >
-                        <option value="food_and_beverage">Food & Beverage</option>
-                        <option value="spa">Spa Service</option>
-                        <option value="parking">Parking</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#4b5563', marginBottom: '4px' }}>Route Destination</label>
-                      <select
-                        value={routingTargetIdx}
-                        onChange={(e) => setRoutingTargetIdx(Number(e.target.value))}
-                        style={{ width: '100%', padding: '8px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '6px', backgroundColor: '#ffffff' }}
-                      >
-                        {folios.map((f, i) => {
-                          if (i === 0) return null; // Can't route to itself
-                          return (
-                            <option key={f.id} value={i}>
-                              Folio {String.fromCharCode(65 + i)} ({f.payerType})
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
+              {folios.length >= 2 && activeFolioIdx === 0 && (() => {
+                const allRules = folios.flatMap(f => 
+                  (f.billingRoutingRules || []).map((r: any) => ({
+                    ...r,
+                    targetFolioPayer: f.payerType,
+                    targetFolioId: f.id
+                  }))
+                );
 
-                    <button 
-                      type="submit"
-                      disabled={creatingRule}
-                      style={{ backgroundColor: '#6366f1', color: '#ffffff', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', marginTop: '4px' }}
-                    >
-                      {creatingRule ? 'Creating...' : 'Create Routing Rule'}
-                    </button>
-                  </form>
-                </div>
-              )}
+                const getFolioName = (folioId: string) => {
+                  const idx = folios.findIndex(f => f.id === folioId);
+                  return idx !== -1 ? `Folio ${String.fromCharCode(65 + idx)}` : 'Unknown';
+                };
+
+                return (
+                  <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', padding: '24px', border: '1px solid #e5e7eb' }}>
+                    <h4 style={{ margin: '0 0 16px 0', fontSize: '15px', fontWeight: 800, color: '#111827' }}>Configure Billing Routing</h4>
+                    
+                    <form onSubmit={handleCreateRoutingRule} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#4b5563', marginBottom: '4px' }}>Route Category</label>
+                        <select
+                          value={routeCat}
+                          onChange={(e) => setRouteCat(e.target.value)}
+                          style={{ width: '100%', padding: '8px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '6px', backgroundColor: '#ffffff' }}
+                        >
+                          <option value="food_and_beverage">Food & Beverage</option>
+                          <option value="spa">Spa Service</option>
+                          <option value="parking">Parking</option>
+                          <option value="minibar">Minibar</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#4b5563', marginBottom: '4px' }}>Route Destination</label>
+                        <select
+                          value={routingTargetIdx}
+                          onChange={(e) => setRoutingTargetIdx(Number(e.target.value))}
+                          style={{ width: '100%', padding: '8px', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '6px', backgroundColor: '#ffffff' }}
+                        >
+                          {folios.map((f, i) => {
+                            if (i === 0) return null; // Can't route to itself
+                            return (
+                              <option key={f.id} value={i}>
+                                Folio {String.fromCharCode(65 + i)} ({f.payerType})
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+
+                      <button 
+                        type="submit"
+                        disabled={creatingRule}
+                        style={{ backgroundColor: '#6366f1', color: '#ffffff', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', marginTop: '4px' }}
+                      >
+                        {creatingRule ? 'Creating...' : 'Create Routing Rule'}
+                      </button>
+                    </form>
+
+                    {allRules.length > 0 && (
+                      <div style={{ marginTop: '20px', borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>
+                        <h5 style={{ margin: '0 0 12px 0', fontSize: '13px', fontWeight: 'bold', color: '#374151' }}>Active Rules</h5>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {allRules.map((rule: any) => (
+                            <div key={rule.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', padding: '8px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+                              <div>
+                                <strong style={{ textTransform: 'capitalize' }}>{rule.chargeCategory.replace(/_/g, ' ')}</strong>
+                                <span style={{ color: '#6b7280', marginLeft: '4px' }}>➜ {getFolioName(rule.targetFolioId)}</span>
+                              </div>
+                              <button 
+                                onClick={() => handleDeleteRule(rule.id)}
+                                style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold', padding: '0 4px' }}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
             </div>
           </div>

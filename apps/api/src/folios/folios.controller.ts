@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Request, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, UseGuards, Request, BadRequestException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { PrismaService } from '../prisma/prisma.service';
 import { v4 as uuidv4 } from 'uuid';
@@ -232,6 +232,30 @@ export class FoliosController {
         value: body.value,
         targetFolioId: body.targetFolioId,
       },
+    });
+  }
+
+  @Delete('rules/:id')
+  async deleteRoutingRule(
+    @Param('id') id: string,
+    @Request() req: any,
+  ) {
+    const tenantId = req.user.tenantId;
+
+    const rule = await this.prisma.billingRoutingRule.findUnique({
+      where: { id },
+    });
+
+    if (!rule) {
+      throw new BadRequestException('Routing rule not found');
+    }
+
+    if (rule.tenantId !== tenantId) {
+      throw new BadRequestException('Security breach: rule tenant context mismatch');
+    }
+
+    return this.prisma.billingRoutingRule.delete({
+      where: { id },
     });
   }
 }

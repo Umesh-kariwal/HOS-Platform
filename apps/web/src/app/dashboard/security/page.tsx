@@ -105,6 +105,11 @@ export default function SecurityPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Audit Logs State
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [isManager, setIsManager] = useState(false);
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+
 
   useEffect(() => {
     const storedToken = localStorage.getItem('hos_jwt_token') || '';
@@ -140,6 +145,19 @@ export default function SecurityPage() {
       if (visitorsRes.ok) setVisitorRecords(await visitorsRes.json());
       if (lostRes.ok) setLostItems(await lostRes.json());
       if (incidentsRes.ok) setIncidents(await incidentsRes.json());
+
+      // Fetch audit logs in parallel (if permitted)
+      try {
+        const auditRes = await fetch(`${apiBaseUrl}/audit-logs`, { headers });
+        if (auditRes.ok) {
+          setAuditLogs(await auditRes.json());
+          setIsManager(true);
+        } else {
+          setIsManager(false);
+        }
+      } catch (auditErr) {
+        setIsManager(false);
+      }
     } catch (err: any) {
       setError('Failed to query peripherals registries.');
     } finally {
@@ -748,6 +766,114 @@ export default function SecurityPage() {
         </div>
 
       </div>
+      {isManager && (
+        <div style={{ ...styles.card, marginTop: '24px' }}>
+          <h2 style={styles.cardTitle}>System Audit Logs</h2>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px', color: '#ced6e0' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', color: '#ffffff' }}>
+                  <th style={{ padding: '12px 8px' }}>Timestamp</th>
+                  <th style={{ padding: '12px 8px' }}>Actor</th>
+                  <th style={{ padding: '12px 8px' }}>Action</th>
+                  <th style={{ padding: '12px 8px' }}>Target Entity</th>
+                  <th style={{ padding: '12px 8px' }}>IP Address</th>
+                  <th style={{ padding: '12px 8px' }}>Payload Diff</th>
+                </tr>
+              </thead>
+              <tbody>
+                {auditLogs.map((log) => {
+                  const isExpanded = expandedLogId === log.id;
+                  return (
+                    <React.Fragment key={log.id}>
+                      <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', backgroundColor: isExpanded ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
+                        <td style={{ padding: '12px 8px', whiteSpace: 'nowrap' }}>{new Date(log.createdAt).toLocaleString()}</td>
+                        <td style={{ padding: '12px 8px' }}>
+                          <div>{log.actor ? `${log.actor.firstName} ${log.actor.lastName}` : 'System'}</div>
+                          <div style={{ fontSize: '11px', color: '#747d8c' }}>{log.actor?.email}</div>
+                        </td>
+                        <td style={{ padding: '12px 8px' }}>
+                          <span style={{
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: 'rgba(30, 144, 255, 0.2)',
+                            color: '#1e90ff',
+                            fontWeight: 'bold',
+                            fontSize: '11px'
+                          }}>
+                            {log.action}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 8px' }}>
+                          <div>{log.entityName}</div>
+                          <div style={{ fontSize: '11px', color: '#747d8c' }}>{log.entityId}</div>
+                        </td>
+                        <td style={{ padding: '12px 8px', fontFamily: 'monospace' }}>{log.ipAddress}</td>
+                        <td style={{ padding: '12px 8px' }}>
+                          <button
+                            onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+                            style={{
+                              backgroundColor: 'rgba(255,255,255,0.08)',
+                              color: '#ffffff',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 8px',
+                              cursor: 'pointer',
+                              fontSize: '11px'
+                            }}
+                          >
+                            {isExpanded ? 'Hide' : 'Inspect Diff'}
+                          </button>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={6} style={{ padding: '16px', backgroundColor: 'rgba(0, 0, 0, 0.2)', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                              <div>
+                                <strong style={{ color: '#ff4d4d', display: 'block', marginBottom: '6px', fontSize: '12px' }}>OLD VALUES:</strong>
+                                <pre style={{
+                                  margin: 0,
+                                  padding: '10px',
+                                  backgroundColor: '#15151b',
+                                  borderRadius: '6px',
+                                  overflowX: 'auto',
+                                  fontSize: '11px',
+                                  color: '#ff4d4d',
+                                  border: '1px solid rgba(255, 77, 77, 0.2)',
+                                  maxHeight: '200px'
+                                }}>
+                                  {log.oldValues ? JSON.stringify(log.oldValues, null, 2) : 'null (No previous state)'}
+                                </pre>
+                              </div>
+                              <div>
+                                <strong style={{ color: '#2ed573', display: 'block', marginBottom: '6px', fontSize: '12px' }}>NEW VALUES:</strong>
+                                <pre style={{
+                                  margin: 0,
+                                  padding: '10px',
+                                  backgroundColor: '#15151b',
+                                  borderRadius: '6px',
+                                  overflowX: 'auto',
+                                  fontSize: '11px',
+                                  color: '#2ed573',
+                                  border: '1px solid rgba(46, 213, 115, 0.2)',
+                                  maxHeight: '200px'
+                                }}>
+                                  {log.newValues ? JSON.stringify(log.newValues, null, 2) : 'null (Delete or Trigger action)'}
+                                </pre>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

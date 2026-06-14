@@ -1,4 +1,5 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { TenantContextMiddleware } from './tenant/tenant-context.middleware';
@@ -15,6 +16,8 @@ import { MaintenanceModule } from './maintenance/maintenance.module';
 import { DispatchModule } from './dispatch/dispatch.module';
 import { RevenueModule } from './revenue/revenue.module';
 import { MessageModule } from './message/message.module';
+import { AuditModule } from './audit/audit.module';
+import { AuditLogInterceptor } from './audit/audit-log.interceptor';
 
 @Module({
   imports: [
@@ -33,9 +36,15 @@ import { MessageModule } from './message/message.module';
     DispatchModule,
     RevenueModule,
     MessageModule,
+    AuditModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditLogInterceptor,
+    },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
