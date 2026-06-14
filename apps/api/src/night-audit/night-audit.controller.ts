@@ -1,10 +1,14 @@
 import { Controller, Get, Post, UseGuards, Request } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { PrismaService } from '../prisma/prisma.service';
+import { RevenueService } from '../revenue/revenue.service';
 
 @Controller('night-audit')
 export class NightAuditController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly revenueService: RevenueService,
+  ) {}
 
   @UseGuards(AuthGuard('jwt'))
   @Get('status')
@@ -140,7 +144,18 @@ export class NightAuditController {
 
       for (const booking of activeBookings) {
         if (booking.room && booking.room.roomType) {
-          const roomRate = Number(booking.room.roomType.rackRate);
+          const createdDate = new Date(booking.createdAt);
+          const diffTime = currentBusDate.getTime() - createdDate.getTime();
+          const leadTimeDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+
+          const roomRate = await this.revenueService.calculateDynamicRate(
+            tenantId,
+            branchId,
+            booking.room.roomTypeId,
+            dateStr,
+            leadTimeDays,
+          );
+
           const idempotencyKey = `room_charge_${booking.id}_${dateStr}`;
 
           // Find or create primary guest folio for this booking

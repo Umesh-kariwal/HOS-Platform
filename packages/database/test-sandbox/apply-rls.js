@@ -27,6 +27,20 @@ async function main() {
   }
   console.log('Applied 04_maintenance_rls.sql');
 
+  const sql3 = fs.readFileSync(path.join(__dirname, '../migrations/05_service_requests_rls.sql'), 'utf8');
+  const statements3 = sql3.split(';').map(s => s.trim()).filter(s => s.length > 0 && !s.startsWith('--'));
+  for (const stmt of statements3) {
+    await prisma.$executeRawUnsafe(stmt);
+  }
+  console.log('Applied 05_service_requests_rls.sql');
+
+  const sql4 = fs.readFileSync(path.join(__dirname, '../migrations/06_revenue_pricing_rules_rls.sql'), 'utf8');
+  const statements4 = sql4.split(';').map(s => s.trim()).filter(s => s.length > 0 && !s.startsWith('--'));
+  for (const stmt of statements4) {
+    await prisma.$executeRawUnsafe(stmt);
+  }
+  console.log('Applied 06_revenue_pricing_rules_rls.sql');
+
   await prisma.$disconnect();
 }
 main().catch(console.error);

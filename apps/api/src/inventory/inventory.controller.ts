@@ -1,11 +1,15 @@
 import { Controller, Get, Query, UseGuards, Request, BadRequestException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { PrismaService } from '../prisma/prisma.service';
+import { RevenueService } from '../revenue/revenue.service';
 
 @Controller('inventory')
 @UseGuards(AuthGuard('jwt'))
 export class InventoryController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly revenueService: RevenueService,
+  ) {}
 
   @Get('availability')
   async getAvailability(
@@ -69,6 +73,9 @@ export class InventoryController {
 
       const days = [];
       const current = new Date(start);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
       while (current < end) {
         const currentDate = new Date(current);
         
@@ -84,11 +91,25 @@ export class InventoryController {
         const soldQty = activeBookings.length;
         const availableQty = totalPhysical - soldQty;
 
+        // Calculate lead time days
+        const diffTime = currentDate.getTime() - today.getTime();
+        const leadTimeDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+
+        const dynamicRate = await this.revenueService.calculateDynamicRate(
+          req.user.tenantId,
+          branchId,
+          rt.id,
+          currentDate.toISOString().split('T')[0],
+          leadTimeDays,
+        );
+
         days.push({
           date: currentDate.toISOString().split('T')[0],
           totalPhysical,
           soldQty,
           availableQty,
+          baseRate: Number(rt.rackRate),
+          dynamicRate,
         });
 
         current.setDate(current.getDate() + 1);

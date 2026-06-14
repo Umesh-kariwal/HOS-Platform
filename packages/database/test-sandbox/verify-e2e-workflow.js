@@ -556,6 +556,116 @@ async function verifyAll() {
       }
 
       console.log('✅ WORKFLOW 8 PASS');
+
+      // --- WORKFLOW 9: Guest Service Request Dispatch (GSR) ---
+      console.log('\n--- WORKFLOW 9: Guest Service Request Dispatch ---');
+      try {
+        await prisma.serviceRequest.deleteMany();
+
+        console.log('POST /dispatch request');
+        const createReqRes = await request(`${API_BASE}/dispatch`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: {
+            bookingId: oopBookingId,
+            requestType: 'towels',
+            details: 'Extra pillow and towel'
+          }
+        });
+        console.log('POST /dispatch response status:', createReqRes.status);
+        if (createReqRes.status !== 201) {
+          throw new Error(`Failed to create service request: ${createReqRes.status}`);
+        }
+        const reqId = createReqRes.data.id;
+
+        console.log('PATCH /dispatch/:id/assign request');
+        const assignReqRes = await request(`${API_BASE}/dispatch/${reqId}/assign`, {
+          method: 'PATCH',
+          headers: authHeaders,
+          body: { assignedEmployeeId: '11111111-1111-1111-1111-111111111112' }
+        });
+        console.log('PATCH /dispatch/:id/assign response status:', assignReqRes.status);
+        if (assignReqRes.status !== 200 || assignReqRes.data.status !== 'assigned') {
+          throw new Error(`Failed to assign service request: ${assignReqRes.status}`);
+        }
+
+        console.log('PATCH /dispatch/:id/complete request');
+        const completeReqRes = await request(`${API_BASE}/dispatch/${reqId}/complete`, {
+          method: 'PATCH',
+          headers: authHeaders
+        });
+        console.log('PATCH /dispatch/:id/complete response status:', completeReqRes.status);
+        if (completeReqRes.status !== 200 || completeReqRes.data.status !== 'completed') {
+          throw new Error(`Failed to complete service request: ${completeReqRes.status}`);
+        }
+
+        console.log('✅ WORKFLOW 9 PASS');
+      } catch (err) {
+        console.error('❌ WORKFLOW 9 FAIL:', err.message);
+        process.exit(1);
+      }
+
+      // --- WORKFLOW 10: Dynamic Pricing & Revenue Optimization (DPR) ---
+      console.log('\n--- WORKFLOW 10: Dynamic Pricing & Revenue Optimization ---');
+      try {
+        await prisma.revenuePricingRule.deleteMany();
+        const testRoomTypeId = '44444444-4444-4444-4444-444444444441'; // Standard Room
+
+        // Check base calculated rate (untriggered)
+        console.log('GET /revenue/calculate-rate (base rate)');
+        const baseRateRes = await request(`${API_BASE}/revenue/calculate-rate?roomTypeId=${testRoomTypeId}&date=2026-06-20&leadTimeDays=10`, {
+          headers: authHeaders
+        });
+        console.log('GET /revenue/calculate-rate status:', baseRateRes.status, 'rate:', baseRateRes.data.rate);
+        if (baseRateRes.status !== 200 || Number(baseRateRes.data.rate) !== 100) {
+          throw new Error(`Expected base rate of 100, got ${baseRateRes.data.rate}`);
+        }
+
+        // Create pricing rule
+        console.log('POST /revenue/rules request');
+        const ruleRes = await request(`${API_BASE}/revenue/rules`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: {
+            roomTypeId: testRoomTypeId,
+            ruleType: 'lead_time_lte',
+            triggerValue: 3,
+            adjustmentPercent: 0.20
+          }
+        });
+        console.log('POST /revenue/rules response status:', ruleRes.status);
+        if (ruleRes.status !== 201) {
+          throw new Error(`Failed to create pricing rule: ${ruleRes.status}`);
+        }
+        const pricingRuleId = ruleRes.data.id;
+
+        // Calculate rate under rule (should trigger 20% increase)
+        console.log('GET /revenue/calculate-rate (triggered)');
+        const triggeredRateRes = await request(`${API_BASE}/revenue/calculate-rate?roomTypeId=${testRoomTypeId}&date=2026-06-20&leadTimeDays=2`, {
+          headers: authHeaders
+        });
+        console.log('GET /revenue/calculate-rate triggered rate:', triggeredRateRes.data.rate);
+        if (Number(triggeredRateRes.data.rate) !== 120) {
+          throw new Error(`Expected triggered rate of 120, got ${triggeredRateRes.data.rate}`);
+        }
+
+        // Delete pricing rule
+        console.log('DELETE /revenue/rules/:id request');
+        const deleteRes = await request(`${API_BASE}/revenue/rules/${pricingRuleId}`, {
+          method: 'DELETE',
+          headers: authHeaders
+        });
+        console.log('DELETE /revenue/rules/:id response status:', deleteRes.status);
+        if (deleteRes.status !== 200) {
+          throw new Error(`Failed to delete pricing rule: ${deleteRes.status}`);
+        }
+
+        console.log('✅ WORKFLOW 10 PASS');
+      } catch (err) {
+        console.error('❌ WORKFLOW 10 FAIL:', err.message);
+        process.exit(1);
+      }
+
     } catch (err) {
       console.error('❌ WORKFLOW 8 FAIL:', err.message);
       process.exit(1);

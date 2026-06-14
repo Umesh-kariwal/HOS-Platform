@@ -12,6 +12,8 @@ import { FoliosModule } from './folios/folios.module';
 import { SyncModule } from './sync/sync.module';
 import { PeripheralsModule } from './peripherals/peripherals.module';
 import { MaintenanceModule } from './maintenance/maintenance.module';
+import { DispatchModule } from './dispatch/dispatch.module';
+import { RevenueModule } from './revenue/revenue.module';
 
 @Module({
   imports: [
@@ -27,6 +29,8 @@ import { MaintenanceModule } from './maintenance/maintenance.module';
     SyncModule,
     PeripheralsModule,
     MaintenanceModule,
+    DispatchModule,
+    RevenueModule,
   ],
   controllers: [],
   providers: [],
